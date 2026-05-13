@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from patient.serializers import PatientSerializer
 from patient.models import Patient
 from rest_framework.generics import RetrieveAPIView, CreateAPIView, UpdateAPIView
+from throttle import ProfileThrottle
 
 # Create your views here.
 
@@ -11,6 +12,7 @@ class PatientView(CreateAPIView, RetrieveAPIView, UpdateAPIView):
     serializer_class = PatientSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = "id"
+    throttle_classes = [ProfileThrottle]
 
 
     def perform_create(self, serializer):
