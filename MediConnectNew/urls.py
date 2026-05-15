@@ -16,8 +16,36 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+class LogoutView(APIView):
+    def post(self, request):
+        """
+        Note: this is not for cookie based
+        for users to logout we must black list the acess token and when the server sends 205 
+        front end will remove the access token from local storage as the access token may still be valid
+        now the user will not have access to the apis
+        """
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"message": "Successfully logged out"}, status=205)
+        except Exception:
+            return Response(status=400)
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/patient/profile/', include('patient.urls')),
+    path('api/', include('user_registration.urls')),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/logout/', LogoutView.as_view()),
 ]
