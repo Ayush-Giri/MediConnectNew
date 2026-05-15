@@ -9,14 +9,15 @@ class RoleChoices(models.TextChoices):
     clinic_admin = ("clinic admin", "Clinic Admin")
 
 class CustomUser(AbstractUser):
-    role = models.CharField(choices=RoleChoices.choices, max_length=50)
-    forgot_password_email_otp = models.CharField(null=True, unique=True, max_length=10)
-    forgot_password_phone_otp = models.CharField(null=True, unique=True, max_length=10)
-    phone_number = models.BigIntegerField(null=True, unique=True)
-    is_email_verified = models.BooleanField(default=False)
-    is_phone_verified = models.BooleanField(default=False)
-    is_account_verified = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    role = models.CharField(choices=RoleChoices.choices, max_length=50, blank=True)
+    forgot_password_email_otp = models.CharField(null=True, unique=True, max_length=10, blank=True)
+    forgot_password_phone_otp = models.CharField(null=True, unique=True, max_length=10, blank=True)
+    phone_number = models.BigIntegerField(null=True, unique=True, blank=True)
+    phone_verification_otp = models.CharField(null=True, max_length=10, blank=True)
+    is_email_verified = models.BooleanField(default=False, blank=True)
+    is_phone_verified = models.BooleanField(default=False, blank=True)
+    is_account_verified = models.BooleanField(default=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     def save(self, *args, **kwargs):
         if self.role == "doctor":
