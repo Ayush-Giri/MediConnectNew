@@ -1,10 +1,9 @@
 from django.shortcuts import render
-from rest_framework.generics import CreateAPIView
+from rest_framework.generics import CreateAPIView, UpdateAPIView
 from user_registration.serializers import UserRegistrationSerializer, MeSerializer
 from django.contrib.auth import get_user_model
-from throttle import SignUpThrottle, VerifyPhoneNumberThrottle, VerifyEmailThrottle
+from throttle import SignUpThrottle, VerifyPhoneNumberThrottle, VerifyEmailThrottle, ChangePasswordDailyThrottle, ChangePasswordHourlyThrottle
 from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
 from helpers import generate_mc_otp, generate_email_verification_url
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated
 from email_verification.models import EmailVerification
 import twilio_sms
+from django.contrib.auth.hashers import check_password
 
 # Create your views here.
 
@@ -140,45 +140,30 @@ def deactive_user(request):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
-        
 
-class SendForgotPasswordEmailOtp(APIView):
-    def post(self, request):
-        email = request.data.get('email')
-        user_instance = get_object_or_404(User, email=email)
-        if user_instance.is_email_verified:
-            otp = generate_mc_otp()
-            user_instance.forgot_password_email_otp = otp
+class ChangePassword(UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserRegistrationSerializer
+    throttle_classes = [ChangePasswordHourlyThrottle, ChangePasswordDailyThrottle]
+    queryset = User.objects.all()
+    lookup_field = "id"
+
+    def partial_update(self, request, *args, **kwargs):
+        user_instance = request.user
+        old_password = request.data.get('old_password')
+        new_password = request.data.get("new_password")
+        if user_instance.check_password(old_password):
+            user_instance.set_password(new_password)
             user_instance.save()
-
             return Response(
-                {"message": "email sent successfully"},
+                {"message": "password changed successfully"},
                 status=status.HTTP_200_OK
             )
         else:
             return Response(
-                {"message": "you have not verified your email so password cant be reset"},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-
-class SendForgotPasswordPhoneOtp(APIView):
-    def post(self, request):
-        phone_number = request.data.get('phone_number')
-        user_instance = get_object_or_404(User, phone_number=phone_number)
-        if user_instance.is_phone_verified:
-            otp = generate_mc_otp()
-            user_instance.forgot_password_phone_otp = otp
-            user_instance.save()
-        else:
-            return Response(
-                {"message": "you have not verified your phone number password cannot be reset"},
+                {"message": "old password is incorrect"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-
-
-
 
 
 
