@@ -34,9 +34,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return data
     
     def to_internal_value(self, data):
+        data = data.copy()
         country_code = "+977"
         phone_number = data.get('phone_number')
         data['phone_number']  = country_code + phone_number
+        if data["role"] == "doctor":
+            data["is_account_verified"] = False
         return super().to_internal_value(data)
 
 

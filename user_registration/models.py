@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
+
 # Create your models here.
 
 class RoleChoices(models.TextChoices):
@@ -18,8 +19,3 @@ class CustomUser(AbstractUser):
     is_phone_verified = models.BooleanField(default=False, blank=True)
     is_account_verified = models.BooleanField(default=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-
-    def save(self, *args, **kwargs):
-        if self.role == "doctor":
-            self.is_account_verified = False
-        super().save(*args, **kwargs)
