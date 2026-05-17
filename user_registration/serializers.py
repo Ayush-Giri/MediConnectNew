@@ -32,6 +32,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if CustomUser.objects.filter(email=data):
             raise serializers.ValidationError("Email already exists")
         return data
+    
+    def to_internal_value(self, data):
+        country_code = "+977"
+        phone_number = data.get('phone_number')
+        data['phone_number']  = country_code + phone_number
+        return super().to_internal_value(data)
 
 
     def create(self, validated_data):

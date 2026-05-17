@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+import twilio_sms
 
 # Create your views here.
 
@@ -29,8 +30,10 @@ class VerifyPhoneNumber(APIView):
     def get(self, request):
         # use get to generate otp and set it into user table
         user_instance = request.user
-        user_instance.phone_verification_otp = generate_mc_otp()
+        generated_otp = generate_mc_otp()
+        user_instance.phone_verification_otp = generated_otp
         user_instance.save()
+        # twilio_sms.send_sms(user_phone_number=user_instance.phone_number, otp=generated_otp)
         return Response(
             {"message": "An otp code has been successfully sent to your device"},
             status=status.HTTP_200_OK
