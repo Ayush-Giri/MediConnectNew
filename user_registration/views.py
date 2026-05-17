@@ -1,15 +1,16 @@
 from django.shortcuts import render
 from rest_framework.generics import CreateAPIView
-from user_registration.serializers import UserRegistrationSerializer
+from user_registration.serializers import UserRegistrationSerializer, MeSerializer
 from django.contrib.auth import get_user_model
-from throttle import SignUpThrottle, VerifyPhoneNumberThrottle
+from throttle import SignUpThrottle, VerifyPhoneNumberThrottle, VerifyEmailThrottle
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from helpers import generate_mc_otp
+from helpers import generate_mc_otp, generate_email_verification_url
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
+from email_verification.models import EmailVerification
 import twilio_sms
 
 # Create your views here.
@@ -21,6 +22,33 @@ class UserRegistrationView(CreateAPIView):
     # phone number verification should happen again if the user updates his phone number
     serializer_class = UserRegistrationSerializer
     throttle_classes = [SignUpThrottle]
+
+
+class MeView(APIView):
+    # if a user changes is phone number or email then they have to verify their email and phone number
+    # again as it will be unverified
+    permission_classes = [IsAuthenticated]
+    serializer_class = MeSerializer
+
+    def get(self, request):
+        serializer = MeSerializer(request.user, context={"request": request})
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK
+        )
+    
+    def patch(self, request):
+        serializer = MeSerializer(request.user, data=request.data, context={"request": request}, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_200_OK
+        )
 
 
 class VerifyPhoneNumber(APIView):
@@ -64,6 +92,28 @@ class VerifyPhoneNumber(APIView):
                 {"message": "otp incorrect please generate a new otp and try again"},
                 ststus=status.HTTP_400_BAD_REQUEST
             )
+        
+
+@api_view(http_method_names=['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([VerifyEmailThrottle])
+def send_email_verification_link(request):
+    if request.method == "GET":
+        EmailVerification.objects.create(user=request.user, link=generate_email_verification_url(), email=request.user.email)
+        return Response(
+            {"message": "a verification link has been sent to you email"},
+            status=status.HTTP_200_OK
+        )
+    elif request.method == "POST":
+        EmailVerification.objects.create(user=request.user, link=generate_email_verification_url())
+        return Response(
+            {"message": "a verification link has been sent to you email"},
+            status=status.HTTP_200_OK
+        )
+    else:
+        return Response(
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
 
 @api_view(http_method_names=['GET', 'POST'])
@@ -85,6 +135,11 @@ def deactive_user(request):
             {"message": "user deactivated successully"},
             status=status.HTTP_200_OK
         )
+    else:
+        return Response(
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+
         
 
 class SendForgotPasswordEmailOtp(APIView):
