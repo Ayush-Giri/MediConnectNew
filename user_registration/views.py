@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.generics import CreateAPIView, UpdateAPIView
 from user_registration.serializers import UserRegistrationSerializer, MeSerializer
 from django.contrib.auth import get_user_model
-from throttle import SignUpThrottle, VerifyPhoneNumberThrottle, VerifyEmailThrottle, ChangePasswordDailyThrottle, ChangePasswordHourlyThrottle
+from throttle import SignUpThrottle, VerifyPhoneNumberThrottle, VerifyEmailThrottle, ChangePasswordDailyThrottle, ChangePasswordHourlyThrottle, ForgotPasswordDailyThrottle, ForgotPasswordHourlyThrottle
 from rest_framework.views import APIView
 from helpers import generate_mc_otp, generate_email_verification_url
 from rest_framework.response import Response
@@ -12,6 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from email_verification.models import EmailVerification
 import twilio_sms
 from django.contrib.auth.hashers import check_password
+from django.shortcuts import get_object_or_404
 
 # Create your views here.
 
@@ -166,5 +167,101 @@ class ChangePassword(UpdateAPIView):
             )
 
 
+# forgot password implementation here give option for both email and phone number based
+
+class ForgotPassword(APIView):
+    # throttle_classes = [ForgotPasswordHourlyThrottle, ForgotPasswordDailyThrottle]
+
+    def get(self, request):
+        # first verify if the email or phone number exists or not if exist then send otp
+        # else send response that email or phone_number does not exist
+        medium = request.query_params.get('medium')
+        credential = request.query_params.get('credential')
+
+        if medium == "email":
+            try:
+                user_instance = User.objects.get(email=credential)
+                generated_otp = generate_mc_otp()
+                user_instance.forgot_password_email_otp = generate_mc_otp()
+                user_instance.save()
+                return Response(
+                    {"message": "an email with otp as been sent to you email"},
+                    status=status.HTTP_200_OK
+                )
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "no such email exists"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif medium == "phone":
+            prefixed_phone = "+977" + str(credential).strip()
+        
+            user_instance = get_object_or_404(User, phone_number=prefixed_phone)
+            generated_otp = generate_mc_otp()
+            user_instance.forgot_password_phone_otp = generated_otp
+            user_instance.save()
+            return Response(
+                {"message": "an otp has been sent to your phone"},
+                status=status.HTTP_200_OK
+            )
+            
+        else:
+            return Response(
+                {"message": "enter a valid medium"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+    
+    def post(self, request):
+        otp = request.data.get('otp')
+        medium = request.data.get('medium')
+        credential = request.data.get('credential')
+        password = request.data.get('password')
+
+        if medium == "phone":
+            prefixed_phone = "+977" + str(credential).strip()
+            try:
+                user_instance = User.objects.get(phone_number=prefixed_phone)
+                if user_instance.forgot_password_phone_otp == otp:
+                    user_instance.set_password(password)
+                    user_instance.forgot_password_phone_otp = None
+                    user_instance.save()
+                    return Response(
+                        {"message": "password changed successfully"},
+                        status=status.HTTP_200_OK
+                    )
+                else:
+                    user_instance.forgot_password_phone_otp = None
+                    user_instance.save()
+                    return Response(
+                        {"message": "the opt provided is incorrect generate a new otp again"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            except User.DoesNotExist:
+                return Response(
+                    {"message": "the phone number provided is incorrect"}
+                )
+        elif medium == "email":
+            user_instance = get_object_or_404(User, email=credential)
+            if user_instance.forgot_password_email_otp == otp:
+                user_instance.set_password(password)
+                user_instance.forgot_password_email_otp = None
+                user_instance.save()
+                return Response(
+                    {"message": "password changed successfully"},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                user_instance.forgot_password_email_otp = None
+                user_instance.save()
+                return Response(
+                        {"message": "the opt provided is incorrect generate a new otp again"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        else:
+            return Response(
+                {"message": "invalid medium"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
